@@ -1,4 +1,4 @@
-# Adaptive Personalized Learning Recommendation Using Reinforcement Learning
+# Adaptive Personalized Learning Recommendation Using Offline Reinforcement Learning:
 
 **A Comparative Analysis of Q-Learning and Monte Carlo Control**
 
