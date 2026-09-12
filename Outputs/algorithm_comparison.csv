@@ -1,0 +1,4 @@
+algorithm,train_reward_last100,episodes_to_converge,val_mean_reward,test_mean_reward,recommendation_accuracy_vs_logged,recommendation_accuracy_vs_best,completion_rate_proxy,training_time_seconds
+Q-Learning,37.434482905982904,2944,17.876228571428573,30.03627142857143,0.8788332086761406,0.9267015706806283,0.468,0.4287877082824707
+Monte Carlo Control,26.95979365079365,2927,17.30979365079365,28.522584126984125,0.8085265519820494,0.8548990276738968,0.442,0.31201863288879395
+Random,,,,,,,0.424,0.0
