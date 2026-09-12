@@ -1,186 +1,130 @@
-# Adaptive Personalized Learning Recommendation Using Offline Reinforcement Learning:
+# Adaptive Personalized Learning Recommendation Using Offline Reinforcement Learning
 
-**A Comparative Analysis of Q-Learning and Monte Carlo Control**
+**A Comparative Analysis of Q-Learning and Monte Carlo Control on EdNet-KT3**
 
-This repository contains the complete implementation of an offline reinforcement learning (RL) framework for personalized learning recommendation, built on the [EdNet-KT3](https://github.com/riiid/ednet) dataset. Two classical model-free RL algorithms — **Q-Learning** and **Monte Carlo Control** — are trained and compared against a **Random policy baseline** on the task of recommending the next educational activity (QUIZ, PRACTICE, or REVISION) to a student, based on their learning state.
+This project formulates personalized learning recommendation as an **offline reinforcement learning (RL)** problem. Student interaction histories from the [EdNet-KT3](https://github.com/riiid/ednet) dataset are transformed into bundle-level learning trajectories with leakage-safe states, observed learning actions, rewards, and next states. Two classical model-free RL algorithms — **Q-Learning** and **Monte Carlo Control** — are trained and evaluated under an identical empirical offline environment, with a **Random policy** baseline for comparison.
 
 ---
 
 ## Overview
 
-Online learning platforms give students access to large collections of educational resources, but students differ in pace, prior knowledge, and performance — a fixed activity sequence is rarely optimal for everyone. This project formulates personalized learning recommendation as a **sequential decision-making problem**: an RL agent observes a student's current learning state, selects an educational activity, receives feedback based on the outcome, and updates its recommendation policy.
+Traditional e-learning systems often rely on static or predefined learning sequences that don't adapt to a student's changing performance. This project instead treats learning recommendation as a sequential decision-making problem: at each step, an agent observes a student's learning state and recommends one of three directly observable activities — **QUIZ**, **PRACTICE**, or **REVISION** — with the goal of maximizing long-term learning outcomes.
 
-The pipeline processes raw EdNet-KT3 interaction logs into leakage-safe RL transitions `(sₜ, aₜ, rₜ, sₜ₊₁)`, trains Q-Learning and Monte Carlo Control on an empirical offline transition model, and evaluates both algorithms across multiple metrics, hyperparameter configurations, ablations, and random seeds.
-
-*(See Figure 1 in the report for the full nine-stage pipeline: EdNet-KT3 → Preprocessing → Question-Bundle Construction → Student Performance/Skill Features → Leakage-Safe State Construction → RL Transition Generation → Student-Level Data Split → Q-Learning/Monte Carlo Control → Offline Evaluation and Comparison.)*
-
----
+Because EdNet-KT3 is a historical interaction log rather than an interactive simulator, an **empirical offline transition model** is built from training-student trajectories, and **action masking** restricts each agent to state-action pairs actually supported by the data — avoiding fabricated outcomes for actions that were never observed.
 
 ## Key Contributions
 
-1. **Adaptive RL-based personalized learning framework** built from historical EdNet-KT3 student interaction data.
-2. **Leakage-safe student state construction** — each state is built only from information available *before* the current question bundle begins, preventing target leakage from bundle outcomes.
-3. **Observable, non-artificial action space** — `{QUIZ, PRACTICE, REVISION}`, derived directly from observed EdNet `source` values rather than assigning synthetic outcomes to unsupported activities (e.g., lectures).
-4. **Empirical offline transition model** built entirely from training-student data, with **action masking** restricting agents to state-action pairs actually supported by observed data.
-5. **Controlled comparison of Q-Learning vs. Monte Carlo Control** under identical states, rewards, transition models, and evaluation protocol.
-6. **Comprehensive, multi-seed evaluation** — average return, mastery success rate, behavioral agreement, convergence behavior, computational time, hyperparameter sensitivity, and a state-representation ablation study.
-
----
+- **Bundle-level offline RL formulation** — question interactions are grouped into learning bundles rather than treated as independent low-level events.
+- **Leakage-safe temporal state construction** — each state is built only from a student's history *before* the current bundle; the bundle's outcome is used solely for the reward, never the state.
+- **Controlled comparison of Q-Learning vs. Monte Carlo Control** under identical state representation, action space, reward function, and student-level data split.
+- **Empirical offline transition environment** built exclusively from training students, with validation/test students held out from environment construction.
+- **Comprehensive experimental analysis**: hyperparameter sensitivity, convergence analysis, train/validation/test generalization tracking, ablation study, and multi-seed evaluation (5 seeds).
+- **Explicit discussion of offline-evaluation limitations**, including the lack of counterfactual outcomes and the difference between behavioral agreement and true recommendation accuracy.
 
 ## Dataset
 
-This project uses **EdNet-KT3**, part of the [EdNet](https://github.com/riiid/ednet) large-scale educational dataset (131M+ interactions from 784,000+ students, collected from the Santa AI-based self-learning platform). KT3 was selected because — unlike question-only subsets — it also records lecture consumption and explanation-viewing activity, making it well suited to modeling broader student learning behavior.
+- **Source:** [EdNet-KT3](https://github.com/riiid/ednet) (Choi et al., AIED 2020) — student interaction logs from the Santa AI-based self-learning platform.
+- **Scope used:** 100 student interaction files (for computational feasibility).
+- **After preprocessing:** 51,523 question attempts, 1,547 lecture sessions, 40,037 explanation sessions.
+- **Final RL dataset:** 25,736 transitions from 98/100 students (2 students excluded for having fewer than 5 transitions), spanning ~600 unique discretized student states and 3 observable actions.
 
-For computational feasibility, this project uses **100 student interaction files** (98 retained after filtering students with fewer than 5 RL transitions).
+## Methodology
 
+| Component | Description |
+|---|---|
+| **State** | Discretized (0/1/2) recent accuracy, skill mastery, learning progression, and a weak-skill "learning history" identifier — built only from information available before the current bundle |
+| **Actions** | `QUIZ`, `PRACTICE`, `REVISION` (the fourth conceptual action, `LESSON`, was never observed in the source data and is not used for training) |
+| **Reward** | `r_t = 2·ΔAccuracy_t + 5·𝟙(Accuracy_t ≥ 0.80 ∧ Accuracy_{t-1} < 0.80)` — rewards accuracy improvement plus a bonus for crossing an 80% mastery threshold |
+| **Transition model** | Empirical, resampled from observed `(state, action) → (reward, next_state, done)` outcomes in the training split only |
+| **Split** | Student-level 68% train / 15% validation / 15% test (no student appears in more than one split) |
 
----
+### Hyperparameters (main configuration)
+
+| Parameter | Value |
+|---|---|
+| Discount factor (γ) | 0.95 |
+| Learning rate (α, Q-Learning only) | 0.10 |
+| Training episodes | 3,000 |
+| Max steps per episode | 30 |
+| Epsilon schedule | 1.00 → 0.05 (decay 0.995) |
+| Random seeds | 5 |
+
+## Results
+
+**Single-seed headline comparison** (random state 42):
+
+| Metric | Q-Learning | Monte Carlo Control |
+|---|---|---|
+| Test Average Return | 30.04 | 28.52 |
+| Logged-Action Agreement | 87.9% | 80.9% |
+| Empirical-Best Agreement | 92.7% | 85.5% |
+| Mastery Completion Proxy | 46.8% | 44.2% |
+| Training Time | 0.51s | 0.37s |
+
+**Multi-seed evaluation** (5 seeds, mean ± SD) — the more reliable comparison:
+
+| Metric | Q-Learning | Monte Carlo Control |
+|---|---|---|
+| Test Average Return | 31.88 ± 0.92 | 30.86 ± 0.78 |
+| Mastery Success Rate | 43.1% ± 2.7% | 42.0% ± 2.4% |
+
+Both algorithms outperform a Random baseline (42.4% mastery completion proxy). Averaged across seeds, **Q-Learning shows a modest, seed-consistent advantage in average return**, while the two algorithms are **not reliably distinguishable on mastery success rate**. An ablation study further shows that removing the weak-skill "learning history" dimension from the state produces by far the largest and most seed-robust *increase* in test return (+6.31), pointing to state-space fragmentation as a key limitation of the current tabular representation.
+
+See the full paper (`QLMC.pdf`) for hyperparameter sensitivity, convergence curves, and the complete ablation study.
 
 ## Repository Structure
 
 ```
 .
-├── Q-Learning_and_Monte_Carlo_Control.ipynb   # Full pipeline: preprocessing -> RL training -> evaluation
-├── Adaptive_Personalized_Learning_Recommendation.pdf   # Full written report
-├── README.md
-└── outputs/                                   # Generated at runtime (CSVs, figures, processed data)
+├── QLMC.ipynb              # End-to-end pipeline: preprocessing, RL transition
+│                            # construction, Q-Learning, Monte Carlo Control,
+│                            # baseline comparison, and evaluation
+├── QLMC.pdf                # Full write-up / report
+└── README.md
 ```
 
-The notebook is organized into the following stages:
+## How to Run
 
-| Section | Description |
-|---|---|
-| Imports & configuration | Library imports, input/output paths, student subset size |
-| Metadata loading | Load and validate `questions.csv` and `lectures.csv` |
-| Student interaction loading | Load and standardize raw per-student interaction logs |
-| Question attempt extraction | Reconstruct bundle-level question attempts and correctness |
-| Skill mastery & recent performance | Leakage-safe mastery and rolling recent-accuracy features |
-| Lecture sessions | Reconstruct lecture viewing sessions and durations |
-| Explanation/revision sessions | Reconstruct explanation-viewing sessions |
-| Behavioral feature combination | Merge all student-level behavioral features |
-| RL state & transition construction | Discretize state components, build `(s, a, r, s')` transitions |
-| Train/val/test split | Student-level split (68/15/15) to prevent information leakage |
-| RL agent configuration | `StudentEnv` simulator, Q-Learning, Monte Carlo Control |
-| Training & convergence | Train both agents, plot training convergence curves |
-| Evaluation | Average return, behavioral agreement, mastery completion proxy, random baseline |
-| Multi-seed evaluation | Retrain and evaluate both algorithms across 5 random seeds |
-| Hyperparameter analysis | Grid over `α`, `γ`, and episode count |
-| Ablation study | Remove each state component individually and re-evaluate |
-| Figures | Ablation bar chart and multi-seed comparison charts |
+The notebook is designed to run on **Kaggle**, reading EdNet-KT3 data from `/kaggle/input/` and writing processed outputs to `/kaggle/working/`.
 
----
-
-## Methodology Summary
-
-### RL Formulation
-The problem is modeled as a Markov Decision Process `M = (S, A, P, R, γ)`:
-
-- **State (`S`)**: built from information available *before* the current question bundle — recent accuracy, skill mastery, learning history (weak-skill indicator), and learning/activity progression. Continuous features are discretized into 3 levels (low / medium / high).
-- **Action space (`A`)**: `{QUIZ, PRACTICE, REVISION}` — three directly observable, question-based actions with real associated outcomes. (A fourth conceptual action, `LESSON`, is defined but not used, since no observed data source maps to it.)
-- **Reward (`R`)**: derived from the observed bundle-level learning outcome following the selected activity.
-- **Transition model (`P`)**: an *empirical* transition model built by resampling observed `(state, action) → (reward, next_state, done)` outcomes from the training split, with action masking to exclude unsupported state-action pairs.
-
-### Algorithms Compared
-- **Q-Learning** — off-policy, temporal-difference bootstrapping:
-  `Q(s,a) ← Q(s,a) + α[r + γ·maxₐ Q(s′,a) − Q(s,a)]`
-- **Monte Carlo Control** — first-visit, complete-episode return averaging (no fixed learning rate; step size decays as `1/N(s,a)`).
-- **Random policy** — uninformed baseline for comparison.
-
-### Evaluation Metrics
-- Test average return
-- Mastery success rate (completion-rate proxy)
-- Logged-action / empirical-best behavioral agreement
-- Training convergence
-- Computational (training) time
-- Multi-seed mean ± standard deviation (5 seeds)
-
----
-
-## Setup
-
-### Requirements
-
-```bash
-pip install numpy pandas matplotlib scikit-learn tqdm
-```
-
-The notebook was developed and run in a **Kaggle notebook environment**, using:
-- `INPUT_DIR = /kaggle/input` — location of the raw EdNet-KT3 CSV files
-- `OUTPUT_DIR = /kaggle/working/cse753_processed` — location for processed data, result tables, and figures
-
-### Running the Pipeline
-
-1. Download the EdNet-KT3 dataset (`KT3/u*.csv`, `questions.csv`, `lectures.csv`) from the [official EdNet repository](https://github.com/riiid/ednet).
-2. Update `INPUT_DIR` / `OUTPUT_DIR` in the configuration cell.
-3. (Optional) Adjust `MAX_STUDENTS` (default `100`) to change the number of students processed.
-4. Run the notebook top to bottom. Each stage saves its intermediate outputs to `OUTPUT_DIR` — preprocessing outputs, RL transitions, trained Q-tables, evaluation tables (CSV), and figures (PNG).
-
----
-
-## Key Results
-
-### Single-Seed Headline Comparison (random state = 42)
-
-| Metric | Q-Learning | Monte Carlo Control |
-|---|---|---|
-| Test Average Return | **30.04** | 28.52 |
-| Logged-Action Agreement | **87.88%** | 80.85% |
-| Empirical-Best Agreement | **92.67%** | 85.49% |
-| Mastery Completion Proxy | **49.4%** | 46.0% |
-| Training Time (s) | 0.50 | **0.37** |
-
-Both algorithms outperform the **Random baseline** (42.4% mastery completion proxy).
-
-### ⚠️ Multi-Seed Evaluation (5 seeds, mean ± SD) — the more reliable comparison
-
-| Algorithm | Test Average Return | Mastery Success Rate |
-|---|---|---|
-| Q-Learning | 31.21 ± 0.74 | **42.1% ± 4.1%** |
-| Monte Carlo Control | **31.31 ± 0.78** | 41.4% ± 2.8% |
-
-**The single-seed advantage for Q-Learning does not hold up under multi-seed evaluation.** Averaged over 5 seeds, the two algorithms are **statistically indistinguishable on return**, with Monte Carlo Control's mean return marginally *higher*. Q-Learning retains only a small, noisy edge in mastery success rate. This is a central finding of the study — see Section 3.8 of the report for full discussion.
-
-### Hyperparameter Sensitivity
-Neither algorithm's reported "main" configuration (`α = 0.10, γ = 0.95`, 3000 episodes) was its best-performing configuration in the tested grid — e.g., Monte Carlo Control with `γ = 0.95` and 5000 episodes reached 31.90, exceeding every tested Q-Learning configuration but one.
-
-### Ablation Study
-Removing 3 of the 4 proposed state components (skill mastery, learning history, learning progression) **increased** Q-Learning's test return relative to the full state — only removing recent performance hurt performance. This suggests the full 4-dimensional state may over-fragment the ~600 observed states relative to the size of the offline dataset (25,736 transitions from 98 students).
-
----
+1. Upload the EdNet-KT3 `questions.csv`, `lectures.csv`, and per-student `u*.csv` interaction files as a Kaggle dataset (or adjust `INPUT_DIR` for a local run).
+2. Open `QLMC.ipynb` and run all cells top to bottom.
+3. Key configuration knobs are set near the top of the notebook:
+   - `MAX_STUDENTS` — number of student files to process (default: 100)
+   - `MIN_EPISODE_LENGTH` — minimum transitions required to keep a student (default: 5)
+   - `RANDOM_STATE` — seed for the main single-seed run (default: 42)
+4. Processed datasets, comparison tables, and figures are saved under `/kaggle/working/cse753_processed/`.
 
 ## Limitations
 
-- **Offline evaluation only** — policies were not deployed to real students; results are based on historical data and an empirical transition model.
-- **Limited student sample** — 100 students (98 after filtering) for computational feasibility.
-- **Restricted action space** — only directly observable question-based actions (`QUIZ`, `PRACTICE`, `REVISION`); lecture/explanation activities were not artificially assigned outcomes.
-- **Simplified, discretized state representation** — the ablation study suggests the 4-component state design may not be optimal for a dataset of this size.
-- **Counterfactual limitation** — historical data only reveals outcomes for actions actually taken, a fundamental constraint of offline RL evaluation.
-- Results are **seed-sensitive**; single-seed, single-configuration comparisons in this domain should be interpreted cautiously (see Sections 3.6 and 3.8 of the report).
+- **Offline evaluation only** — policies are evaluated against an empirical simulator built from historical data, not through live deployment to real students.
+- **No counterfactual outcomes** — the dataset only records what students actually did, so causal superiority of one recommendation over another cannot be established.
+- **Restricted action space** — only QUIZ, PRACTICE, and REVISION are used as trainable actions; lecture/explanation activities are excluded to avoid fabricated outcomes.
+- **Small student sample** (100 students) limits generalizability.
+- **Tabular state representation** is discretized and simplified relative to a student's actual learning condition.
 
-See Section 4 of the report for the full discussion and future directions (deep RL methods, richer student representations, expanded action spaces, specialized offline RL algorithms, and real-world A/B evaluation).
+See Section 4 of the paper for the full discussion of limitations and future directions (larger datasets, richer sequential state representations, offline RL methods such as CQL/BCQ, and eventual online/human-subject evaluation).
 
----
+## Citation
 
-## Report
+If you use this work, please cite:
 
-The full written report — including methodology, all tables/figures, and detailed discussion — is included in this repository:
-
-📄 [`Adaptive_Personalized_Learning_Recommendation.pdf`](https://github.com/Shamazda/Adaptive-Personalized-Learning-Recommendation-Using-Reinforcement-Learning/blob/main/Adaptive%20Personalized%20Learning%20Recommendation.pdf)
-
----
+```
+Islam, S., & Nidhi, R. S. Adaptive Personalized Learning Recommendation Using
+Reinforcement Learning: A Comparative Analysis of Q-Learning and Monte Carlo Control.
+```
 
 ## References
 
-1. Y. Choi et al., "EdNet: A Large-Scale Hierarchical Dataset in Education," *AIED*, 2020.
-2. X. Tang, Y. Chen, X. Li, J. Liu, and Z. Ying, "A Reinforcement Learning Approach to Personalized Learning Recommendation Systems," *British Journal of Mathematical and Statistical Psychology*, 72(1):108–135, 2019.
-3. R. S. Sutton and A. G. Barto, *Reinforcement Learning: An Introduction*, 2nd ed., MIT Press, 2018.
-4. C. Piech et al., "Deep Knowledge Tracing," *NeurIPS*, 2015.
-5. C. Tan, R. Han, R. Ye, and K. Chen, "Adaptive Learning Recommendation Strategy Based on Deep Q-Learning," *Applied Psychological Measurement*, 44(4):251–266, 2020.
-6. Y. Chen, X. Li, J. Liu, and Z. Ying, "Recommendation System for Adaptive Learning," *Applied Psychological Measurement*, 42(1):24–41, 2018.
-7. A. Riedmann, P. Schaper, and B. Lugrin, "Reinforcement Learning in Education: A Systematic Literature Review," *International Journal of Artificial Intelligence in Education*, 2025.
+1. Tang, X., Chen, Y., Li, X., Liu, J., & Ying, Z. (2019). A reinforcement learning approach to personalized learning recommendation systems. *British Journal of Mathematical and Statistical Psychology*, 72(1), 108–135.
+2. Sutton, R. S., & Barto, A. G. (2018). *Reinforcement Learning: An Introduction* (2nd ed.). MIT Press.
+3. Piech, C., et al. (2015). Deep knowledge tracing. *NeurIPS*, 28.
+4. Tan, C., Han, R., Ye, R., & Chen, K. (2020). Adaptive learning recommendation strategy based on deep Q-learning. *Applied Psychological Measurement*, 44(4), 251–266.
+5. Chen, Y., Li, X., Liu, J., & Ying, Z. (2018). Recommendation system for adaptive learning. *Applied Psychological Measurement*, 42(1), 24–41.
+6. Riedmann, A., Schaper, P., & Lugrin, B. (2025). Reinforcement learning in education: A systematic literature review. *International Journal of Artificial Intelligence in Education*.
+7. Choi, Y., et al. (2020). EdNet: A large-scale hierarchical dataset in education. *AIED*.
 
----
+## Authors
 
-## Keywords
-
-Personalized Learning · Reinforcement Learning · Q-Learning · Monte Carlo Control · Adaptive Learning · Educational Recommendation · EdNet-KT3
+- Shamazda Islam
+- Ramisa Sharar Nidhi
