@@ -1,3 +1,0 @@
-algorithm,return_mean,return_std,mastery_mean,mastery_std,time_mean,Average Return (mean +/- sd),Mastery Success Rate (mean +/- sd)
-Monte Carlo Control,31.310052063492066,0.783036008832283,0.4144,0.02829840984931838,0.31990580558776854,31.31 +/- 0.78,41.4% +/- 2.8%
-Q-Learning,31.21102666666667,0.7429361117234736,0.4208,0.04051172669734038,0.44762420654296875,31.21 +/- 0.74,42.1% +/- 4.1%
